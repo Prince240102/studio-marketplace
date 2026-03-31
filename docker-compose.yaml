@@ -4,12 +4,9 @@ services:
       context: .
     restart: always
     environment:
-      MARKETPLACE_DATA_ROOT: /data
+      MARKETPLACE_DATA_ROOT: /app/plugins
       MARKETPLACE_PORT: 3001
       MARKETPLACE_ADMIN_TOKEN: ${MARKETPLACE_ADMIN_TOKEN:-}
-    volumes:
-      # Local copy of plugins (updated via sync_from_github.sh)
-      - ./plugins:/data
     ports:
       - "5006:3001"
 

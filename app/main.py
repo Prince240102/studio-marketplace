@@ -417,19 +417,21 @@ def admin_update_stream(
         global _update_queue
         while True:
             if _update_queue is None:
-                yield f"data: {{\"status\": \"idle\"}}\n\n"
+                yield 'data: {"status": "idle"}\n\n'
                 await asyncio.sleep(1)
                 continue
             try:
                 line = await asyncio.wait_for(_update_queue.get(), timeout=1.0)
                 if line == "__DONE__":
                     success = _update_state.get("success")
-                    yield f"data: {{\"done\": true, \"success\": {json.dumps(success)}}}\n\n"
+                    done_msg = json.dumps({"done": True, "success": success})
+                    yield f"data: {done_msg}\n\n"
                     _update_queue = None
                     break
-                yield f"data: {json.dumps({\"line\": line})}\n\n"
+                line_msg = json.dumps({"line": line})
+                yield f"data: {line_msg}\n\n"
             except asyncio.TimeoutError:
-                yield f": heartbeat\n\n"
+                yield ": heartbeat\n\n"
 
     return StreamingResponse(
         event_stream(),
