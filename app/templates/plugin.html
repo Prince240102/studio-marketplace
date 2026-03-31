@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ plugin.plugin_id }} · Dify Marketplace</title>
+    <style>
+      :root {
+        --bg: #f6f7f9;
+        --panel: #ffffff;
+        --text: #0f172a;
+        --muted: rgba(15, 23, 42, 0.55);
+        --border: rgba(15, 23, 42, 0.10);
+        --shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+        --blue: #1d4ed8;
+        --tag: rgba(15, 23, 42, 0.06);
+      }
+      body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background: var(--bg); color: var(--text); }
+      a { color: var(--blue); text-decoration: none; }
+      .wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px; }
+      header { background: var(--panel); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10; }
+      .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; }
+      .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; }
+      .brand-mark { width: 30px; height: 30px; border-radius: 8px; background: radial-gradient(circle at 30% 30%, #60a5fa, #1d4ed8); display: grid; place-items: center; color: #fff; font-size: 14px; }
+      .nav { display: flex; gap: 10px; align-items: center; }
+      .nav a { color: rgba(15, 23, 42, 0.75); text-decoration: none; font-size: 13px; padding: 7px 10px; border-radius: 999px; }
+      .nav a.active { background: rgba(29, 78, 216, 0.10); color: var(--blue); }
+      .hero { padding: 22px 0 18px; }
+      .hero-card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); padding: 18px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+      .hero-left { display: flex; gap: 14px; align-items: center; }
+      .icon { width: 64px; height: 64px; border-radius: 16px; background: rgba(15, 23, 42, 0.04); overflow: hidden; flex: 0 0 auto; }
+      .icon img { width: 100%; height: 100%; object-fit: cover; }
+      .title { margin: 0; font-size: 18px; font-weight: 800; }
+      .sub { margin-top: 4px; font-size: 12px; color: rgba(15, 23, 42, 0.55); }
+      .btns { display: flex; gap: 10px; align-items: center; }
+      .btn { border: 1px solid rgba(29, 78, 216, 0.22); background: rgba(29, 78, 216, 0.10); color: var(--blue); padding: 10px 14px; border-radius: 10px; font-size: 13px; cursor: pointer; }
+      .btn.primary { background: linear-gradient(180deg, rgba(29,78,216,1), rgba(37,99,235,1)); color: #fff; border-color: transparent; }
+      main { padding: 0 0 50px; }
+      .layout { display: grid; grid-template-columns: 1fr 320px; gap: 16px; }
+      .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); padding: 16px; }
+      .k { font-size: 11px; color: var(--muted); margin-top: 10px; }
+      .v { font-size: 13px; margin-top: 4px; }
+      .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--tag); border: 1px solid rgba(15, 23, 42, 0.08); color: rgba(15, 23, 42, 0.7); margin-right: 6px; margin-top: 6px; }
+      .md h2 { margin: 18px 0 10px; font-size: 14px; }
+      .md h3 { margin: 14px 0 8px; font-size: 13px; }
+      .md p, .md li { font-size: 13px; color: rgba(15,23,42,.78); }
+      .md code { background: rgba(15, 23, 42, 0.06); padding: 2px 6px; border-radius: 6px; }
+      .md pre { background: #0b1220; color: #e5e7eb; padding: 12px; border-radius: 12px; overflow: auto; }
+      .md img { max-width: 100%; border-radius: 12px; border: 1px solid var(--border); }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="wrap">
+        <div class="topbar">
+          <div class="brand">
+            <div class="brand-mark">Di</div>
+            <div>Dify Marketplace</div>
+            <div class="nav" style="margin-left: 12px;">
+              <a class="active" href="/">Plugins</a>
+              <a href="/templates">Templates</a>
+            </div>
+          </div>
+          <div class="nav">
+            <a href="/">Back</a>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <section class="hero">
+      <div class="wrap">
+        <div class="hero-card">
+          <div class="hero-left">
+            <div class="icon"><img src="/api/v1/plugins/{{ plugin.org }}/{{ plugin.name }}/icon" alt="" /></div>
+            <div>
+              <div class="title">{{ (latest.label.get('en-US') or latest.label.get('en_US') or plugin.name) }}</div>
+              <div class="sub">{{ plugin.org }} / {{ plugin.name }} · {{ latest.version }}</div>
+            </div>
+          </div>
+          <div class="btns">
+            <a class="btn primary" href="#install">Install</a>
+            <a class="btn" href="/api/v1/plugins/{{ latest.org }}/{{ latest.name }}/{{ latest.version }}/download">Download</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <main>
+      <div class="wrap layout">
+        <div class="panel md">
+          <h2>Plugin Description</h2>
+          <div class="k">Overview</div>
+          <div class="v">{{ (latest.description.get('en-US') or latest.description.get('en_US') or '') }}</div>
+
+          {% if readme_html %}
+          <div style="margin-top: 14px;" class="md">{{ readme_html | safe }}</div>
+          {% else %}
+          <div class="k" style="margin-top: 14px;">README</div>
+          <div class="v">No README.md found in extracted folder.</div>
+          {% endif %}
+        </div>
+        <aside class="panel">
+          <div class="k">Category</div>
+          <div class="v"><span class="tag">{{ latest.category }}</span></div>
+
+          <div class="k">Author</div>
+          <div class="v">{{ latest.org }}</div>
+
+          <div class="k">Version</div>
+          <div class="v">{{ latest.version }}</div>
+
+          <div class="k">Unique Identifier</div>
+          <div class="v"><code>{{ latest.unique_identifier }}</code></div>
+
+          <div class="k">Tags</div>
+          <div class="v">
+            {% for t in latest.tags %}
+              <span class="tag">{{ t }}</span>
+            {% endfor %}
+            {% if latest.tags|length == 0 %}
+              <span class="tag">(none)</span>
+            {% endif %}
+          </div>
+
+          <div class="k">Versions</div>
+          <div class="v">
+            {% for v in plugin.versions[:8] %}
+              <div style="display:flex; justify-content:space-between; gap:10px; margin-top:6px;">
+                <div>{{ v.version }}</div>
+                <a href="/api/v1/plugins/{{ v.org }}/{{ v.name }}/{{ v.version }}/download">download</a>
+              </div>
+            {% endfor %}
+          </div>
+        </aside>
+      </div>
+    </main>
+  </body>
+</html>

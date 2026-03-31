@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ template.name }} · Dify Templates</title>
+    <style>
+      :root {
+        --bg: #f6f7f9;
+        --panel: #ffffff;
+        --text: #0f172a;
+        --muted: rgba(15, 23, 42, 0.55);
+        --border: rgba(15, 23, 42, 0.10);
+        --shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+        --blue: #1d4ed8;
+        --green: #15803d;
+        --code-bg: #0b1220;
+      }
+      body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background: var(--bg); color: var(--text); }
+      a { color: var(--blue); text-decoration: none; }
+      .wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px; }
+      header { background: var(--panel); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10; }
+      .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; }
+      .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; }
+      .brand-mark { width: 30px; height: 30px; border-radius: 8px; background: radial-gradient(circle at 30% 30%, #60a5fa, #1d4ed8); display: grid; place-items: center; color: #fff; font-size: 14px; }
+      .nav { display: flex; gap: 10px; align-items: center; }
+      .nav a { color: rgba(15, 23, 42, 0.75); text-decoration: none; font-size: 13px; padding: 7px 10px; border-radius: 999px; }
+      .nav a.active { background: rgba(29, 78, 216, 0.10); color: var(--blue); }
+      .hero { padding: 22px 0 18px; }
+      .hero-card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); padding: 18px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+      .hero-left { display: flex; gap: 14px; align-items: center; }
+      .icon { width: 64px; height: 64px; border-radius: 16px; background: rgba(15, 23, 42, 0.04); overflow: hidden; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; }
+      .icon img { width: 100%; height: 100%; object-fit: cover; }
+      .title { margin: 0; font-size: 18px; font-weight: 800; }
+      .sub { margin-top: 4px; font-size: 12px; color: rgba(15, 23, 42, 0.55); }
+      .mode-badge { display: inline-block; margin-top: 6px; font-size: 11px; padding: 2px 8px; border-radius: 999px; background: rgba(5, 150, 105, 0.1); color: var(--green); border: 1px solid rgba(5, 150, 105, 0.2); }
+      .btns { display: flex; gap: 10px; align-items: center; }
+      .btn { border: 1px solid rgba(29, 78, 216, 0.22); background: rgba(29, 78, 216, 0.10); color: var(--blue); padding: 10px 14px; border-radius: 10px; font-size: 13px; cursor: pointer; display: inline-block; }
+      .btn.primary { background: linear-gradient(180deg, rgba(29,78,216,1), rgba(37,99,235,1)); color: #fff; border-color: transparent; }
+      main { padding: 0 0 50px; }
+      .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); padding: 16px; margin-bottom: 16px; }
+      .panel h2 { margin: 0 0 12px; font-size: 14px; }
+      .k { font-size: 11px; color: var(--muted); margin-top: 10px; }
+      .v { font-size: 13px; margin-top: 4px; }
+      pre { background: var(--code-bg); color: #e5e7eb; padding: 12px; border-radius: 12px; overflow: auto; font-size: 12px; line-height: 1.5; max-height: 500px; }
+      code { font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, monospace; }
+      .yaml pre { white-space: pre-wrap; word-break: break-word; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="wrap">
+        <div class="topbar">
+          <div class="brand">
+            <div class="brand-mark">Di</div>
+            <div>Dify Marketplace</div>
+            <div class="nav" style="margin-left: 12px;">
+              <a href="/">Plugins</a>
+              <a class="active" href="/templates">Templates</a>
+            </div>
+          </div>
+          <div class="nav">
+            <a href="/templates">Back to Templates</a>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <section class="hero">
+      <div class="wrap">
+        <div class="hero-card">
+          <div class="hero-left">
+            <div class="icon">
+              {% if template.icon %}
+                <img src="/templates/{{ template.template_id }}/icon" alt="" />
+              {% else %}
+                <span style="font-size: 28px;">📋</span>
+              {% endif %}
+            </div>
+            <div>
+              <div class="title">{{ template.name }}</div>
+              <div class="sub">{{ template.template_id }}</div>
+              <div class="mode-badge">{{ template.mode }}</div>
+            </div>
+          </div>
+          <div class="btns">
+            <a class="btn primary" href="/api/v1/templates/{{ template.template_id }}/download">Download YAML</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <main>
+      <div class="wrap">
+        <div class="panel">
+          <h2>Description</h2>
+          <p style="font-size: 13px; color: rgba(15,23,42,.78); margin: 0;">
+            {{ template.description or 'No description provided.' }}
+          </p>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-top: 16px;">
+            <div>
+              <div class="k">Version</div>
+              <div class="v">{{ template.version }}</div>
+            </div>
+            <div>
+              <div class="k">Mode</div>
+              <div class="v">{{ template.mode }}</div>
+            </div>
+            <div>
+              <div class="k">Template ID</div>
+              <div class="v"><code>{{ template.template_id }}</code></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel yaml">
+          <h2>template.yaml</h2>
+          {% if yaml_content %}
+          <pre><code>{{ yaml_content }}</code></pre>
+          {% else %}
+          <p style="color: var(--muted); font-size: 13px;">No template.yaml found.</p>
+          {% endif %}
+        </div>
+      </div>
+    </main>
+  </body>
+</html>

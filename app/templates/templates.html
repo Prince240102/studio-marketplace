@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Templates · Dify Marketplace</title>
+    <style>
+      :root {
+        --bg: #f6f7f9;
+        --panel: #ffffff;
+        --text: #0f172a;
+        --muted: rgba(15, 23, 42, 0.55);
+        --border: rgba(15, 23, 42, 0.10);
+        --shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+        --blue: #1d4ed8;
+        --green: #15803d;
+      }
+      body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background: var(--bg); color: var(--text); }
+      a { color: inherit; text-decoration: none; }
+      .wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px; }
+      header { background: var(--panel); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10; }
+      .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; }
+      .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; }
+      .brand-mark { width: 30px; height: 30px; border-radius: 8px; background: radial-gradient(circle at 30% 30%, #60a5fa, #1d4ed8); display: grid; place-items: center; color: #fff; font-size: 14px; }
+      .nav { display: flex; gap: 10px; align-items: center; }
+      .nav a { color: rgba(15, 23, 42, 0.75); text-decoration: none; font-size: 13px; padding: 7px 10px; border-radius: 999px; }
+      .nav a.active { background: rgba(29, 78, 216, 0.10); color: var(--blue); }
+      .search { display: flex; align-items: center; gap: 10px; }
+      .search input { width: 280px; max-width: 40vw; padding: 9px 12px; border-radius: 999px; border: 1px solid var(--border); background: #fff; outline: none; }
+      .pill-btn { border: 1px solid var(--border); background: #fff; padding: 8px 12px; border-radius: 999px; font-size: 12px; cursor: pointer; }
+      .hero { background: linear-gradient(135deg, #065f46, #15803d); position: relative; overflow: hidden; }
+      .hero::after { content: ""; position: absolute; inset: -120px -120px auto auto; width: 520px; height: 520px; background: radial-gradient(circle, rgba(255,255,255,0.2), transparent 60%); transform: rotate(15deg); }
+      .hero-inner { padding: 48px 0 22px; color: #fff; }
+      .hero h1 { margin: 0; font-size: 34px; letter-spacing: -0.02em; }
+      .hero p { margin: 8px 0 0; opacity: 0.85; font-size: 13px; }
+      .tabs { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+      .tab { background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.18); color: #fff; text-decoration: none; padding: 8px 12px; border-radius: 999px; font-size: 12px; }
+      .tab.active { background: rgba(255,255,255,0.26); }
+      main { padding: 18px 0 50px; }
+      .section-title { display: flex; align-items: baseline; justify-content: space-between; margin: 18px 0 10px; }
+      .section-title h2 { margin: 0; font-size: 14px; }
+      .section-title .meta { color: var(--muted); font-size: 12px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+      .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px; box-shadow: var(--shadow); }
+      .card-head { display: flex; gap: 12px; }
+      .icon-wrap { width: 44px; height: 44px; border-radius: 12px; background: rgba(15, 23, 42, 0.04); overflow: hidden; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; }
+      .icon-wrap img { width: 100%; height: 100%; object-fit: cover; }
+      .icon-wrap .placeholder { font-size: 20px; }
+      .name { margin: 0; font-size: 14px; font-weight: 700; }
+      a:hover .name { text-decoration: underline; }
+      .sub { margin-top: 3px; font-size: 12px; color: rgba(15, 23, 42, 0.55); }
+      .desc { margin: 10px 0 0; font-size: 12px; color: rgba(15, 23, 42, 0.55); line-height: 1.35; }
+      .mode-badge { display: inline-block; margin-top: 8px; font-size: 11px; padding: 2px 8px; border-radius: 999px; background: rgba(5, 150, 105, 0.1); color: var(--green); border: 1px solid rgba(5, 150, 105, 0.2); }
+      .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="wrap">
+        <div class="topbar">
+          <div class="brand">
+            <div class="brand-mark">Di</div>
+            <div>Dify Marketplace</div>
+            <div class="nav" style="margin-left: 12px;">
+              <a href="/">Plugins</a>
+              <a class="active" href="/templates">Templates</a>
+            </div>
+          </div>
+          <form class="search" method="get" action="/templates">
+            <input name="q" value="{{ q }}" placeholder="Search templates" />
+            <input type="hidden" name="mode" value="{{ mode }}" />
+            <button class="pill-btn" type="submit">Search</button>
+          </form>
+        </div>
+      </div>
+    </header>
+
+    <section class="hero">
+      <div class="wrap hero-inner">
+        <h1>Application Templates</h1>
+        <p>Ready-to-use Dify application templates for common use cases.</p>
+        <div class="tabs">
+          <a class="tab {% if mode == '' %}active{% endif %}" href="/templates?q={{ q }}">All modes</a>
+          <a class="tab {% if mode == 'agent' %}active{% endif %}" href="/templates?mode=agent&q={{ q }}">Agent</a>
+          <a class="tab {% if mode == 'chatflow' %}active{% endif %}" href="/templates?mode=chatflow&q={{ q }}">Chatflow</a>
+          <a class="tab {% if mode == 'workflow' %}active{% endif %}" href="/templates?mode=workflow&q={{ q }}">Workflow</a>
+        </div>
+      </div>
+    </section>
+
+    <main>
+      <div class="wrap">
+        <div class="section-title">
+          <h2>Search</h2>
+          <div class="meta">{{ templates|length }} shown · {{ total }} indexed</div>
+        </div>
+        {% if templates %}
+        <div class="grid">
+          {% for t in templates %}
+          <a class="card" href="/templates/{{ t.template_id }}">
+            <div class="card-head">
+              <div class="icon-wrap">
+                {% if t.icon %}
+                  <img src="/templates/{{ t.template_id }}/icon" alt="" />
+                {% else %}
+                  <span class="placeholder">📋</span>
+                {% endif %}
+              </div>
+              <div>
+                <p class="name">{{ t.name }}</p>
+                <div class="sub">{{ t.template_id }} · {{ t.version }}</div>
+              </div>
+            </div>
+            <p class="desc">{{ t.description }}</p>
+            <span class="mode-badge">{{ t.mode }}</span>
+          </a>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty">
+          <p>No templates found.</p>
+        </div>
+        {% endif %}
+      </div>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,36 @@
+services:
+  private_marketplace:
+    build:
+      context: .
+    restart: always
+    environment:
+      MARKETPLACE_DATA_ROOT: /data
+      MARKETPLACE_PORT: 3001
+      MARKETPLACE_ADMIN_TOKEN: ${MARKETPLACE_ADMIN_TOKEN:-}
+    volumes:
+      # Local copy of plugins (updated via sync_from_github.sh)
+      - ./plugins:/data
+    ports:
+      - "5006:3001"
+
+  # # Bulk installer for plugins and templates
+  # bulk-installer:
+  #   image: dify-bulk-installer:latest
+  #   build:
+  #     context: ../
+  #     dockerfile: SCRIPTS/Dockerfile
+  #   restart: "no"
+  #   environment:
+  #     DIFY_URL: http://api:5001
+  #     ADMIN_API_KEY: ${ADMIN_API_KEY:-}
+  #     DIFY_WORKSPACE_ID: ${DIFY_WORKSPACE_ID:-}
+  #   depends_on:
+  #     api:
+  #       condition: service_started
+  #     worker:
+  #       condition: service_started
+  #   volumes:
+  #     - ../ASSETS:/app/ASSETS
+  #   networks:
+  #     - default
+  #
