@@ -1,0 +1,204 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ─────────────────────────────────────────────
+# Usage: ./dify_downloader.sh <path-to-json-file> <category>
+#
+# Example:
+#   ./dify_downloader.sh data_source.json datasource
+#
+# Supported categories:
+#   model | tool | datasource | agent-strategy | trigger | extension
+# ─────────────────────────────────────────────
+
+API="https://marketplace.dify.ai/api/v1"
+
+declare -A SORT_MAP=(
+  ["model"]="install_count"
+  ["tool"]="created_at"
+  ["datasource"]="created_at"
+  ["agent-strategy"]="created_at"
+  ["trigger"]="created_at"
+  ["extension"]="created_at"
+)
+declare -A DIR_MAP=(
+  ["model"]="models"
+  ["tool"]="tools"
+  ["datasource"]="datasources"
+  ["agent-strategy"]="agent-strategies"
+  ["trigger"]="triggers"
+  ["extension"]="extensions"
+)
+
+# ─── Validate arguments ───────────────────────
+if [[ $# -lt 2 ]]; then
+  echo "❌ Usage: $0 <path-to-response.json> <category>"
+  echo ""
+  echo "   Supported categories:"
+  echo "     model | tool | datasource | agent-strategy | trigger | extension"
+  echo ""
+  echo "   Example:"
+  echo "     $0 data_source.json datasource"
+  exit 1
+fi
+
+JSON_FILE="$1"
+CATEGORY="$2"
+
+# ─── Validate JSON file ───────────────────────
+if [[ ! -f "$JSON_FILE" ]]; then
+  echo "❌ File not found: $JSON_FILE"
+  exit 1
+fi
+
+if ! jq empty "$JSON_FILE" 2>/dev/null; then
+  echo "❌ Invalid JSON: $JSON_FILE"
+  exit 1
+fi
+
+# ─── Validate category ────────────────────────
+if [[ -z "${SORT_MAP[$CATEGORY]+_}" ]]; then
+  echo "❌ Unknown category: '$CATEGORY'"
+  echo "   Supported: ${!SORT_MAP[*]}"
+  exit 1
+fi
+
+echo "✅ JSON file : $JSON_FILE"
+echo "✅ Category  : $CATEGORY"
+
+# ─── Helpers ──────────────────────────────────
+post_json() {
+  local payload="$1"
+  for attempt in {1..5}; do
+    RESPONSE=$(curl -s -X POST "$API/plugins/search/advanced" \
+      -H "Content-Type: application/json" \
+      -d "$payload")
+    if [[ "$(echo "$RESPONSE" | jq -r '.code')" == "0" ]]; then
+      echo "$RESPONSE"
+      return 0
+    fi
+    echo "⚠️  API retry $attempt..."
+    sleep $((attempt * 2))
+  done
+  echo "❌ API failed after 5 attempts"
+  exit 1
+}
+
+# ─── Main download loop ───────────────────────
+SORT_BY="${SORT_MAP[$CATEGORY]}"
+OUT_DIR="${DIR_MAP[$CATEGORY]}"
+mkdir -p "$OUT_DIR"
+
+echo ""
+echo "👉 CATEGORY : $CATEGORY"
+echo "   Sort by  : $SORT_BY"
+echo "   Output   : $OUT_DIR/"
+echo ""
+
+# --- step 1: get total from JSON file ---
+TOTAL=$(jq -r '.data.total // 0' "$JSON_FILE")
+
+if [[ "$TOTAL" == "0" || "$TOTAL" == "null" ]]; then
+  echo "⚠️  Total not found in JSON file — querying API..."
+  TOTAL=$(post_json "{
+    \"page\":1,
+    \"page_size\":1,
+    \"query\":\"\",
+    \"sort_by\":\"$SORT_BY\",
+    \"sort_order\":\"DESC\",
+    \"category\":\"$CATEGORY\",
+    \"tags\":[]
+  }" | jq '.data.total')
+fi
+
+echo "Total plugins: $TOTAL"
+[[ "$TOTAL" == "0" ]] && {
+  echo "Nothing to download."
+  exit 0
+}
+
+# --- step 2: reuse plugins from JSON if complete, else fetch from API ---
+PLUGINS=$(jq -c '.data.plugins[]? // .data.items[]?' "$JSON_FILE" 2>/dev/null || true)
+PLUGIN_COUNT=$(echo "$PLUGINS" | grep -c '.' 2>/dev/null || echo 0)
+
+if [[ -z "$PLUGINS" || "$PLUGIN_COUNT" -lt "$TOTAL" ]]; then
+  echo "📡 JSON file has $PLUGIN_COUNT / $TOTAL plugins — fetching full list from API..."
+  ALL_RESPONSE=$(post_json "{
+    \"page\":1,
+    \"page_size\":$TOTAL,
+    \"query\":\"\",
+    \"sort_by\":\"$SORT_BY\",
+    \"sort_order\":\"DESC\",
+    \"category\":\"$CATEGORY\",
+    \"tags\":[]
+  }")
+  PLUGINS=$(echo "$ALL_RESPONSE" | jq -c '.data.plugins[]? // .data.items[]?')
+fi
+
+if [[ -z "$PLUGINS" ]]; then
+  echo "⚠️  No plugins found for '$CATEGORY' (unexpected response structure)"
+  jq '.data | keys' "$JSON_FILE"
+  exit 1
+fi
+
+echo "Processing plugins..."
+echo ""
+
+while read -r plugin; do
+  PLUGIN_ID=$(echo "$plugin" | jq -r '.plugin_id // .id // empty')
+  VERSION=$(echo "$plugin" | jq -r '.latest_version // .version // empty')
+
+  if [[ -z "$PLUGIN_ID" || -z "$VERSION" ]]; then
+    echo "⚠️  Skipping invalid entry:"
+    echo "$plugin" | jq
+    continue
+  fi
+
+  echo "→ Checking $PLUGIN_ID ($VERSION)"
+
+  ORG="${PLUGIN_ID%%/*}"
+  NAME="${PLUGIN_ID##*/}"
+  DIR="$OUT_DIR/${ORG}-${NAME}"
+  mkdir -p "$DIR"
+
+  FILE="$DIR/${NAME}.difypkg"
+  TMP="$DIR/${NAME}.tmp"
+  VERSION_FILE="$DIR/version"
+
+  # ---------- cache check ----------
+  if [[ -f "$FILE" && -f "$VERSION_FILE" ]]; then
+    EXISTING=$(tr -d '[:space:]' <"$VERSION_FILE")
+    CURRENT=$(echo "$VERSION" | tr -d '[:space:]')
+    if [[ "$EXISTING" == "$CURRENT" && -s "$FILE" ]]; then
+      echo "⏭️  [$CATEGORY] cached → $PLUGIN_ID ($VERSION)"
+      continue
+    fi
+  fi
+
+  URL="$API/plugins/$ORG/$NAME/$VERSION/download"
+  echo "⬇️  [$CATEGORY] $PLUGIN_ID ($VERSION)"
+  echo "   URL: $URL"
+
+  for attempt in {1..5}; do
+    CODE=$(curl -s -L -w "%{http_code}" -o "$TMP" "$URL")
+    if [[ "$CODE" == "200" && -s "$TMP" ]]; then
+      mv "$TMP" "$FILE"
+      echo -n "$VERSION" >"$VERSION_FILE"
+      echo "✅ Saved → $FILE"
+      break
+    elif [[ "$CODE" == "429" ]]; then
+      echo "⚠️  Rate limited, retry $attempt..."
+      sleep $((attempt * 2))
+    else
+      echo "❌ retry $attempt (HTTP $CODE)"
+      sleep $((attempt * 2))
+    fi
+  done
+
+  rm -f "$TMP" || true
+  sleep 1
+
+done <<<"$PLUGINS"
+
+echo ""
+echo "🎉 Done — category: $CATEGORY"

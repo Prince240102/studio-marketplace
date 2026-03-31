@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ROOT_DIR="${1:-.}"
+
+find "$ROOT_DIR" -type f -name "*.difypkg" | while IFS= read -r file; do
+  target_dir="${file%.difypkg}"
+  if [ -d "$target_dir" ]; then
+    rm -rf "$target_dir"
+    echo "Deleted: $target_dir"
+  else
+    echo "Skipped (not found): $target_dir"
+  fi
+done

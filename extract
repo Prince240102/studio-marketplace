@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ROOT_DIR="${1:-.}"
+
+find "$ROOT_DIR" -type f -name "*.difypkg" | while IFS= read -r file; do
+  target_dir="${file%.difypkg}"
+  mkdir -p "$target_dir"
+  unzip -o "$file" -d "$target_dir" >/dev/null
+  echo "Extracted: $file -> $target_dir"
+done
