@@ -4,6 +4,7 @@ import asyncio
 import json
 import mimetypes
 import os
+import queue
 import subprocess
 import threading
 import time
@@ -85,10 +86,64 @@ def _db_check(force: bool = False) -> bool:
     return bool(ok)
 
 
+def _split_package_identifier(unique_identifier: str) -> tuple[str, str | None]:
+    s = str(unique_identifier or "").strip()
+    if "@" not in s:
+        return s, None
+    base, checksum = s.split("@", 1)
+    checksum = checksum.strip() or None
+    return base.strip(), checksum
+
+
+def _format_package_identifier(
+    base_unique_identifier: str, checksum: str | None
+) -> str:
+    base = str(base_unique_identifier or "").strip()
+    cs = str(checksum).strip() if checksum is not None else ""
+    if base and cs:
+        return f"{base}@{cs}"
+    return base
+
+
+_db_checksum_cache: dict[str, str] = {}
+_db_checksum_cache_lock = threading.Lock()
+
+
+def _db_checksum_for_unique_identifier(unique_identifier: str) -> str:
+    base, _ = _split_package_identifier(unique_identifier)
+    if not base:
+        return ""
+    with _db_checksum_cache_lock:
+        cached = _db_checksum_cache.get(base)
+    if cached is not None:
+        return cached
+
+    try:
+        from .index_db import get_version_row
+
+        vr = get_version_row(_db_path(), base)
+        checksum = str(vr["checksum"]) if vr and vr["checksum"] else ""
+    except Exception:
+        checksum = ""
+
+    with _db_checksum_cache_lock:
+        # Cheap guard against unbounded growth.
+        if len(_db_checksum_cache) > 10_000:
+            _db_checksum_cache.clear()
+        _db_checksum_cache[base] = checksum
+    return checksum
+
+
+def _db_full_package_identifier(unique_identifier: str) -> str:
+    base, _ = _split_package_identifier(unique_identifier)
+    return _format_package_identifier(base, _db_checksum_for_unique_identifier(base))
+
+
 def _plugin_row_to_card(r: Any) -> dict[str, Any]:
     label = json.loads(r["label_json"]) if r["label_json"] else {}
     desc = json.loads(r["description_json"]) if r["description_json"] else {}
     tags = json.loads(r["tags_json"]) if r["tags_json"] else []
+    latest_uid = str(r["latest_unique_identifier"])
     return {
         "type": "plugin",
         "org": r["org"],
@@ -96,7 +151,7 @@ def _plugin_row_to_card(r: Any) -> dict[str, Any]:
         "plugin_id": r["plugin_id"],
         "version": r["latest_version"],
         "latest_version": r["latest_version"],
-        "latest_package_identifier": r["latest_unique_identifier"],
+        "latest_package_identifier": _db_full_package_identifier(latest_uid),
         "icon": f"/api/v1/plugins/{r['org']}/{r['name']}/icon",
         "verified": False,
         "label": label,
@@ -330,7 +385,7 @@ _update_state = {
     "success": None,
     "finished_at": 0.0,
 }
-_update_queue = None
+_update_queue: queue.Queue[str] | None = None
 _update_lock = threading.Lock()
 
 
@@ -339,7 +394,7 @@ def _emit(line: str) -> None:
     global _update_queue
     with _update_lock:
         if _update_queue is not None:
-            _update_queue.put_nowait(line)
+            _update_queue.put(line)
 
 
 @app.post("/api/v1/admin/update")
@@ -350,7 +405,7 @@ def admin_update(x_admin_token: str | None = Header(default=None)) -> dict[str, 
         raise HTTPException(status_code=409, detail="Update already in progress")
 
     global _update_queue
-    _update_queue = asyncio.Queue()
+    _update_queue = queue.Queue()
     _update_state["running"] = True
     _update_state["success"] = None
 
@@ -365,7 +420,7 @@ def admin_update(x_admin_token: str | None = Header(default=None)) -> dict[str, 
             _update_state["finished_at"] = time.time()
             with _update_lock:
                 if _update_queue is not None:
-                    _update_queue.put_nowait("__DONE__")
+                    _update_queue.put("__DONE__")
             return
 
         try:
@@ -400,7 +455,7 @@ def admin_update(x_admin_token: str | None = Header(default=None)) -> dict[str, 
             _update_state["finished_at"] = time.time()
             with _update_lock:
                 if _update_queue is not None:
-                    _update_queue.put_nowait("__DONE__")
+                    _update_queue.put("__DONE__")
 
     threading.Thread(target=_run_update, daemon=True).start()
     return {"status": "started"}
@@ -421,7 +476,8 @@ def admin_update_stream(
                 await asyncio.sleep(1)
                 continue
             try:
-                line = await asyncio.wait_for(_update_queue.get(), timeout=1.0)
+                # queue.Queue is thread-safe; read it without blocking the event loop.
+                line = await asyncio.to_thread(_update_queue.get, True, 1.0)
                 if line == "__DONE__":
                     success = _update_state.get("success")
                     done_msg = json.dumps({"done": True, "success": success})
@@ -430,7 +486,7 @@ def admin_update_stream(
                     break
                 line_msg = json.dumps({"line": line})
                 yield f"data: {line_msg}\n\n"
-            except asyncio.TimeoutError:
+            except queue.Empty:
                 yield ": heartbeat\n\n"
 
     return StreamingResponse(
@@ -446,11 +502,14 @@ def admin_update_stream(
 
 @app.get("/api/v1/plugins/download")
 def download_by_unique_identifier(unique_identifier: str) -> Response:
+    base_uid, expected_checksum = _split_package_identifier(unique_identifier)
     if _db_check():
         from .index_db import get_version_row
 
-        r = get_version_row(_db_path(), unique_identifier)
+        r = get_version_row(_db_path(), base_uid)
         if not r:
+            raise HTTPException(status_code=404, detail="Plugin not found")
+        if expected_checksum and str(r["checksum"]) != expected_checksum:
             raise HTTPException(status_code=404, detail="Plugin not found")
         pkg_path = _version_row_to_record(r).pkg_path
         return FileResponse(
@@ -460,8 +519,10 @@ def download_by_unique_identifier(unique_identifier: str) -> Response:
         )
 
     _ensure_index_fresh()
-    rec = index.get_pkg(unique_identifier)
+    rec = index.get_pkg(base_uid)
     if not rec:
+        raise HTTPException(status_code=404, detail="Plugin not found")
+    if expected_checksum and rec.checksum != expected_checksum:
         raise HTTPException(status_code=404, detail="Plugin not found")
     return FileResponse(
         path=str(rec.pkg_path),
@@ -501,7 +562,9 @@ def batch_plugins(plugin_ids: dict = Body(...)) -> dict[str, Any]:
                     "model": None,
                     "tool": None,
                     "latest_version": r["latest_version"],
-                    "latest_package_identifier": r["latest_unique_identifier"],
+                    "latest_package_identifier": _db_full_package_identifier(
+                        str(r["latest_unique_identifier"])
+                    ),
                     "status": "active",
                     "deprecated_reason": "",
                     "alternative_plugin_id": "",
@@ -530,7 +593,9 @@ def batch_plugins(plugin_ids: dict = Body(...)) -> dict[str, Any]:
                 "model": None,
                 "tool": None,
                 "latest_version": latest.version,
-                "latest_package_identifier": latest.unique_identifier,
+                "latest_package_identifier": _format_package_identifier(
+                    latest.unique_identifier, latest.checksum
+                ),
                 "status": "active",
                 "deprecated_reason": "",
                 "alternative_plugin_id": "",
@@ -553,7 +618,9 @@ def _to_plugin_card(pr, latest) -> dict[str, Any]:
         "plugin_id": pr.plugin_id,
         "version": latest.version,
         "latest_version": latest.version,
-        "latest_package_identifier": latest.unique_identifier,
+        "latest_package_identifier": _format_package_identifier(
+            latest.unique_identifier, latest.checksum
+        ),
         "icon": f"/api/v1/plugins/{pr.org}/{pr.name}/icon",
         # IMPORTANT: do not include `icon_dark` as a relative URL.
         # The Dify web app uses `icon_dark` directly and will resolve it against
@@ -629,7 +696,8 @@ def plugins_by_identifier(payload: dict = Body(...)) -> dict[str, Any]:
 
     _ensure_index_fresh()
     for uid in identifiers:
-        rec = index.get_pkg(str(uid))
+        base_uid, _ = _split_package_identifier(str(uid))
+        rec = index.get_pkg(base_uid)
         if not rec:
             continue
         pr = index.get_plugin(rec.plugin_id)
@@ -664,7 +732,9 @@ def plugins_versions_batch(payload: dict = Body(...)) -> dict[str, Any]:
                     "version": {
                         "plugin_name": name,
                         "plugin_org": org,
-                        "unique_identifier": uid,
+                        "unique_identifier": _format_package_identifier(
+                            uid, str(vr["checksum"])
+                        ),
                     },
                 }
             )
@@ -688,7 +758,7 @@ def plugins_versions_batch(payload: dict = Body(...)) -> dict[str, Any]:
                 "version": {
                     "plugin_name": name,
                     "plugin_org": org,
-                    "unique_identifier": uid,
+                    "unique_identifier": _format_package_identifier(uid, rec.checksum),
                 },
             }
         )
@@ -1230,7 +1300,9 @@ def plugin_versions(
                     "file_name": Path(str(r["pkg_path"])).name,
                     "checksum": r["checksum"],
                     "created_at": r["created_at"],
-                    "unique_identifier": r["unique_identifier"],
+                    "unique_identifier": _format_package_identifier(
+                        str(r["unique_identifier"]), str(r["checksum"])
+                    ),
                 }
             )
         return {"data": {"versions": out}}
@@ -1252,7 +1324,9 @@ def plugin_versions(
                 "file_name": v.pkg_path.name,
                 "checksum": v.checksum,
                 "created_at": v.created_at,
-                "unique_identifier": v.unique_identifier,
+                "unique_identifier": _format_package_identifier(
+                    v.unique_identifier, v.checksum
+                ),
             }
         )
     return {"data": {"versions": out}}
@@ -1338,11 +1412,14 @@ def plugin_info(plugin_id: str) -> dict[str, Any]:
         pr = get_plugin_row(_db_path(), plugin_id)
         if not pr:
             raise HTTPException(status_code=404, detail="Plugin not found")
+        latest_uid = str(pr["latest_unique_identifier"])
         return {
             "data": {
                 "plugin": {
                     "category": pr["category"],
-                    "latest_package_identifier": pr["latest_unique_identifier"],
+                    "latest_package_identifier": _db_full_package_identifier(
+                        latest_uid
+                    ),
                     "latest_version": pr["latest_version"],
                 },
                 "version": {"version": pr["latest_version"]},
@@ -1358,7 +1435,9 @@ def plugin_info(plugin_id: str) -> dict[str, Any]:
         "data": {
             "plugin": {
                 "category": pr.category,
-                "latest_package_identifier": latest.unique_identifier,
+                "latest_package_identifier": _format_package_identifier(
+                    latest.unique_identifier, latest.checksum
+                ),
                 "latest_version": latest.version,
             },
             "version": {"version": latest.version},
@@ -1389,7 +1468,9 @@ def plugin_detail_page(request: Request, org: str, name: str) -> HTMLResponse:
                     "org": r["org"],
                     "name": r["name"],
                     "version": r["version"],
-                    "unique_identifier": r["unique_identifier"],
+                    "unique_identifier": _format_package_identifier(
+                        str(r["unique_identifier"]), str(r["checksum"])
+                    ),
                 }
             )
 
